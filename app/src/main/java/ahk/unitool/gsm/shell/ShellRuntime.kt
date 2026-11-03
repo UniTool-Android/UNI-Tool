@@ -15,7 +15,7 @@ class ShellRuntime private constructor(context: Context) {
         listOf(bin, lib, home, tmp).forEach { it.mkdirs() }
         if (!init.exists()) init.writeText(INIT_SCRIPT)
     }
-    fun shellCommand(): Pair<String, Array<String>> = "/system/bin/sh" to arrayOf("-c", ". \"$" + "{UNITOOL_INIT}\"; exec /system/bin/sh -i")
+    fun shellCommand(): Pair<String, Array<String>> = "/system/bin/sh" to arrayOf("-i")
     fun environment(usbFd: Int? = null): Array<String> {
         val env = linkedMapOf(
             "HOME" to home.absolutePath, "TMPDIR" to tmp.absolutePath,
@@ -23,7 +23,7 @@ class ShellRuntime private constructor(context: Context) {
             "TERM" to "xterm-256color", "LANG" to "C.UTF-8",
             "UNITOOL" to "1", "UNITOOL_HOME" to root.absolutePath,
             "UNITOOL_BIN" to bin.absolutePath, "UNITOOL_LIB" to lib.absolutePath,
-            "UNITOOL_INIT" to init.absolutePath
+            "UNITOOL_INIT" to init.absolutePath, "ENV" to init.absolutePath, "LD_LIBRARY_PATH" to lib.absolutePath
         )
         System.getenv("ANDROID_ROOT")?.let { env["ANDROID_ROOT"] = it }
         System.getenv("ANDROID_DATA")?.let { env["ANDROID_DATA"] = it }
