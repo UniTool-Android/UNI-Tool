@@ -5,26 +5,41 @@ import android.system.Os
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.zip.ZipInputStream
 
 /**
- * Official Termux aarch64 bootstrap (bash, apt/pkg, coreutils, …).
+ * Termux environment for applicationId [ahk.unitool.gsm].
  *
- * Termux binaries hardcode `/data/data/com.termux/files`. We extract into our
- * [Context.getFilesDir] and run under a thin proot bind so those paths resolve
- * without root and without Ubuntu.
+ * Correct model (termux-generator / VHEditor):
+ *  - Bootstrap + packages built with package name ahk.unitool.gsm
+ *  - PREFIX = <dataDir>/files/usr  (no com.termux paths, no proot bind)
  *
- * USB tools must use [ahk.unitool.gsm.usb.UsbTransport] + `USB_FD`, not stock
- * `/dev/bus/usb` or unpatched `adb devices`.
+ * Fallback:
+ *  - Stock Termux bootstrap (com.termux hardcoded paths) + thin proot bind
+ *  - Used only until a custom bootstrap is shipped/downloaded
+ *
+ * Custom bootstrap URL can be set via BuildConfig or default GitHub release.
  */
 object TermuxEnv {
 
     private const val TAG = "TermuxEnv"
     private const val ASSET = "termux/bootstrap-aarch64.zip"
-    private const val BOOTSTRAP_URL =
+    /** Official stock bootstrap (requires proot path bind). */
+    private const val STOCK_BOOTSTRAP_URL =
         "https://github.com/termux/termux-packages/releases/download/bootstrap-2026.11.01-r1%2Bapt.android-7/bootstrap-aarch64.zip"
-    private const val STAMP = "bootstrap-2026.11.01-r1"
-    const val FAKE_FILES = "/data/data/com.termux/files"
+    /**
+     * Preferred: bootstrap rebuilt for ahk.unitool.gsm (termux-generator CI artifact / release).
+     * Falls back to stock if this 404s.
+     */
+    private const val CUSTOM_BOOTSTRAP_URL =
+        "https://github.com/ahksoft/UNI-Tool/releases/download/termux-bootstrap/bootstrap-aarch64.zip"
+    private const val STAMP_CUSTOM = "bootstrap-custom-ahk.unitool.gsm"
+    private const val STAMP_STOCK = "bootstrap-stock-2026.11.01-r1"
+    /** Only for stock bootstrap RPATH compatibility. */
+    private const val STOCK_FAKE_FILES = "/data/data/com.termux/files"
 
     lateinit var filesDir: File
         private set
@@ -33,70 +48,135 @@ object TermuxEnv {
     lateinit var home: File
         private set
 
+    /** True when bootstrap was built for this app id (native paths, no proot). */
+    @Volatile var nativePrefix: Boolean = false
+        private set
+
     @Volatile var ready: Boolean = false
         private set
 
     fun isReady(ctx: Context): Boolean {
         ensure(ctx)
-        return ready || File(prefix, "bin/bash").exists()
+        return ready || File(prefix, "bin/bash").canExecute()
     }
 
     @Synchronized
     fun install(ctx: Context): Boolean {
         ensure(ctx)
-        val marker = File(filesDir, ".$STAMP")
-        if (marker.exists() && File(prefix, "bin/bash").exists()) {
-            installProot(ctx)
+        val customMarker = File(filesDir, ".$STAMP_CUSTOM")
+        val stockMarker = File(filesDir, ".$STAMP_STOCK")
+        if (File(prefix, "bin/bash").exists()) {
+            nativePrefix = customMarker.exists()
+            if (!nativePrefix) installProot(ctx)
             ready = true
+            Log.i(TAG, "Termux already installed nativePrefix=$nativePrefix")
             return true
         }
+
         Log.i(TAG, "extracting Termux bootstrap → $prefix")
-        try {
-            openBootstrapStream(ctx).use { input ->
-                ZipInputStream(input).use { zis ->
-                    val buf = ByteArray(64 * 1024)
-                    var entry = zis.nextEntry
-                    var symFile: File? = null
-                    while (entry != null) {
-                        val name = entry.name
-                        if (name == "SYMLINKS.txt") {
-                            symFile = File(filesDir, "SYMLINKS.txt")
-                            FileOutputStream(symFile).use { out ->
-                                var n: Int
-                                while (zis.read(buf).also { n = it } > 0) out.write(buf, 0, n)
-                            }
-                        } else {
-                            val out = File(prefix, name)
-                            if (entry.isDirectory) {
-                                out.mkdirs()
-                            } else {
-                                out.parentFile?.mkdirs()
-                                FileOutputStream(out).use { o ->
-                                    var n: Int
-                                    while (zis.read(buf).also { n = it } > 0) o.write(buf, 0, n)
-                                }
-                                out.setExecutable(true, false)
-                            }
-                        }
-                        zis.closeEntry()
-                        entry = zis.nextEntry
-                    }
-                    symFile?.let { applySymlinks(it) }
-                }
+        return try {
+            val (stream, isCustom) = openBootstrapStream(ctx)
+            stream.use { input ->
+                extractZip(input)
             }
-            installProot(ctx)
-            marker.writeText(STAMP)
+            if (isCustom) {
+                customMarker.writeText(STAMP_CUSTOM)
+                stockMarker.delete()
+                nativePrefix = true
+                Log.i(TAG, "Custom bootstrap for ahk.unitool.gsm — native PREFIX, no proot")
+            } else {
+                stockMarker.writeText(STAMP_STOCK)
+                customMarker.delete()
+                nativePrefix = false
+                installProot(ctx)
+                Log.i(TAG, "Stock bootstrap — proot path bind enabled")
+            }
             ready = true
-            Log.i(TAG, "Termux ready (pkg/apt)")
-            return true
+            true
         } catch (e: Exception) {
             Log.e(TAG, "bootstrap failed: ${e.message}", e)
             ready = false
-            return false
+            false
         }
     }
 
+    private fun extractZip(input: InputStream) {
+        ZipInputStream(input).use { zis ->
+            val buf = ByteArray(64 * 1024)
+            var entry = zis.nextEntry
+            var symFile: File? = null
+            while (entry != null) {
+                val name = entry.name
+                if (name == "SYMLINKS.txt") {
+                    symFile = File(filesDir, "SYMLINKS.txt")
+                    FileOutputStream(symFile).use { out ->
+                        var n: Int
+                        while (zis.read(buf).also { n = it } > 0) out.write(buf, 0, n)
+                    }
+                } else {
+                    val out = File(prefix, name)
+                    if (entry.isDirectory) {
+                        out.mkdirs()
+                    } else {
+                        out.parentFile?.mkdirs()
+                        FileOutputStream(out).use { o ->
+                            var n: Int
+                            while (zis.read(buf).also { n = it } > 0) o.write(buf, 0, n)
+                        }
+                        out.setExecutable(true, false)
+                    }
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+            symFile?.let { applySymlinks(it) }
+        }
+    }
+
+    /**
+     * Prefer: asset → custom release (this app id) → stock Termux release.
+     * @return stream to zip and whether it is a custom (native prefix) bootstrap
+     */
+    private fun openBootstrapStream(ctx: Context): Pair<InputStream, Boolean> {
+        try {
+            val asset = ctx.assets.open(ASSET)
+            // Asset may be custom or stock; detect via marker file next to zip if present
+            val meta = try {
+                ctx.assets.open("termux/bootstrap.meta").bufferedReader().readText().trim()
+            } catch (_: Exception) {
+                ""
+            }
+            val custom = meta.contains("ahk.unitool.gsm") || meta.contains("custom")
+            Log.i(TAG, "using asset bootstrap custom=$custom")
+            return asset to custom
+        } catch (_: Exception) {
+            // fall through
+        }
+        // Custom release first
+        try {
+            Log.i(TAG, "trying custom bootstrap $CUSTOM_BOOTSTRAP_URL")
+            return httpStream(CUSTOM_BOOTSTRAP_URL) to true
+        } catch (e: Exception) {
+            Log.w(TAG, "custom bootstrap unavailable: ${e.message}")
+        }
+        Log.i(TAG, "downloading stock bootstrap $STOCK_BOOTSTRAP_URL")
+        return httpStream(STOCK_BOOTSTRAP_URL) to false
+    }
+
+    private fun httpStream(urlStr: String): InputStream {
+        val conn = URL(urlStr).openConnection() as HttpURLConnection
+        conn.connectTimeout = 30_000
+        conn.readTimeout = 300_000
+        conn.instanceFollowRedirects = true
+        val code = conn.responseCode
+        if (code !in 200..299) {
+            throw IllegalStateException("HTTP $code for $urlStr")
+        }
+        return conn.inputStream
+    }
+
     private fun ensure(ctx: Context) {
+        // Android filesDir == <dataDir>/files  → Termux PREFIX = filesDir/usr
         filesDir = ctx.filesDir
         prefix = File(filesDir, "usr")
         home = File(filesDir, "home")
@@ -122,25 +202,6 @@ object TermuxEnv {
         }
     }
 
-
-    private fun openBootstrapStream(ctx: Context): java.io.InputStream {
-        return try {
-            ctx.assets.open(ASSET)
-        } catch (e: Exception) {
-            Log.i(TAG, "asset missing, downloading $BOOTSTRAP_URL")
-            val url = java.net.URL(BOOTSTRAP_URL)
-            val conn = url.openConnection() as java.net.HttpURLConnection
-            conn.connectTimeout = 30_000
-            conn.readTimeout = 120_000
-            conn.instanceFollowRedirects = true
-            val code = conn.responseCode
-            if (code !in 200..299) {
-                throw IllegalStateException("HTTP $code downloading bootstrap")
-            }
-            conn.inputStream
-        }
-    }
-
     private fun installProot(ctx: Context) {
         val proot = File(filesDir, "proot")
         val talloc = File(filesDir, "libtalloc.so.2")
@@ -151,7 +212,7 @@ object TermuxEnv {
                 }
                 proot.setExecutable(true, false)
             } catch (e: Exception) {
-                Log.w(TAG, "proot missing: ${e.message}")
+                Log.w(TAG, "proot asset missing: ${e.message}")
             }
         }
         if (!talloc.exists()) {
@@ -159,80 +220,52 @@ object TermuxEnv {
                 ctx.assets.open("termux/libtalloc.so.2").use { i ->
                     FileOutputStream(talloc).use { o -> i.copyTo(o) }
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
     }
 
     /**
-     * Termux packages hardcode [FAKE_FILES] (`/data/data/com.termux/files`).
-     * Our app lives under `/data/data/ahk.unitool.gsm/files`.
-     * proot binds real filesDir → FAKE_FILES so ELF RPATHs and scripts resolve.
-     * PROOT_TMP_DIR must be a real, writable host path (not the fake one).
+     * Shell argv: native bash when custom bootstrap; else proot bind for stock.
      */
     fun shellCommand(ctx: Context): Pair<String, Array<String>> {
         install(ctx)
-        prepareProotDirs()
         val bash = File(prefix, "bin/bash")
         val proot = File(filesDir, "proot")
-        val hostFiles = filesDir.absolutePath
-        return if (proot.canExecute() && bash.exists()) {
-            val args = arrayOf(
-                "--link2symlink",
-                "-b", "$hostFiles:$FAKE_FILES",
-                "-b", "/system:/system",
-                "-b", "/vendor:/vendor",
-                "-b", "/sys:/sys",
-                "-b", "/dev:/dev",
-                "-b", "/proc:/proc",
-                "-b", "/sdcard:/sdcard",
-                "-w", "$FAKE_FILES/home",
-                "$FAKE_FILES/usr/bin/bash",
+        return if (nativePrefix && bash.exists()) {
+            // VHEditor / termux-generator style — direct exec
+            bash.absolutePath to arrayOf("-l")
+        } else if (proot.canExecute() && bash.exists()) {
+            proot.absolutePath to arrayOf(
+                "-b", "${filesDir.absolutePath}:$STOCK_FAKE_FILES",
+                "-w", "$STOCK_FAKE_FILES/home",
+                "$STOCK_FAKE_FILES/usr/bin/bash",
                 "--login",
             )
-            proot.absolutePath to args
         } else if (bash.exists()) {
-            // Last resort without proot — many Termux ELFs will still break
-            bash.absolutePath to arrayOf("--login")
+            bash.absolutePath to arrayOf("-l")
         } else {
             "/system/bin/sh" to emptyArray()
         }
     }
 
-    private fun prepareProotDirs() {
-        val prootTmp = File(filesDir, "proot-tmp")
-        listOf(
-            prootTmp,
-            home,
-            File(prefix, "tmp"),
-            File(prefix, "var/tmp"),
-            File(prefix, "etc"),
-            File(filesDir, "tmp"),
-        ).forEach { d ->
-            if (!d.exists()) d.mkdirs()
-        }
-    }
-
     fun buildEnv(ctx: Context, usbFd: Int? = null): Array<String> {
         ensure(ctx)
-        prepareProotDirs()
-        val hostFiles = filesDir.absolutePath
-        val prootTmp = File(filesDir, "proot-tmp").absolutePath
-        // Inside proot, processes should see Termux-style paths (FAKE_FILES).
-        // proot itself needs PROOT_TMP_DIR on the real host filesystem.
+        val p = prefix.absolutePath
+        val h = home.absolutePath
         val list = mutableListOf(
-            "HOME=$FAKE_FILES/home",
-            "PREFIX=$FAKE_FILES/usr",
-            "TMPDIR=$FAKE_FILES/usr/tmp",
-            "PATH=$FAKE_FILES/usr/bin:/system/bin",
-            "LD_LIBRARY_PATH=$FAKE_FILES/usr/lib:$hostFiles",
-            "PROOT_TMP_DIR=$prootTmp",
-            "PROOT_TMPDIR=$prootTmp",
+            "HOME=$h",
+            "PREFIX=$p",
+            "TMPDIR=$p/tmp",
+            "PATH=$p/bin:/system/bin",
+            "LD_LIBRARY_PATH=$p/lib:${filesDir.absolutePath}",
             "TERM=xterm-256color",
             "LANG=en_US.UTF-8",
             "EXTERNAL_STORAGE=/sdcard",
-            "TERMUX_VERSION=unitool",
             "UNITOOL=1",
-            "UNITOOL_FILES=$hostFiles",
+            "TERMUX_VERSION=unitool",
+            // Match Termux app identity for scripts that check package
+            "TERMUX_APP__PACKAGE_NAME=ahk.unitool.gsm",
         )
         if (usbFd != null && usbFd >= 0) {
             list += "USB_FD=$usbFd"

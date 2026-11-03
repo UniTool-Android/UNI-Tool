@@ -102,3 +102,11 @@ See [TESTING.md](TESTING.md) for the full test map.
 - Termux shell starts by default after bootstrap extract
 - Toolbar subtitle shows connected USB `vid:pid`, path, permission, and `fd` when open
 - Bootstrap asset: `app/src/main/assets/termux/bootstrap-aarch64.zip`
+
+
+## Termux (custom package name)
+
+See [docs/TERMUX.md](docs/TERMUX.md).
+
+Bootstrap for **ahk.unitool.gsm** is built via workflow **Build Termux bootstrap** (termux-generator style).  
+Until that artifact exists, the app falls back to stock Termux zip + proot path bind.

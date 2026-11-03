@@ -1,0 +1,95 @@
+name: Build Termux bootstrap (ahk.unitool.gsm)
+
+# Rebuilds Termux packages/bootstrap for applicationId ahk.unitool.gsm
+# (same approach as termux-generator / VHEditor — native PREFIX, no proot).
+# Runtime: often 2–4+ hours. Manual dispatch only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      architectures:
+        description: "Bootstrap architectures (comma-separated)"
+        required: true
+        default: "aarch64"
+      extra_packages:
+        description: "Extra packages to preinstall (comma-separated)"
+        required: false
+        default: ""
+
+concurrency:
+  group: termux-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Generate bootstrap for ahk.unitool.gsm
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout termux-generator
+        uses: actions/checkout@v4
+        with:
+          repository: ahksoft/termux-generator
+          path: termux-generator
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-17-jdk git patch curl unzip
+
+      - name: Build Termux (custom package name)
+        working-directory: termux-generator
+        run: |
+          set -e
+          EXTRA="${{ github.event.inputs.extra_packages }}"
+          ARCH="${{ github.event.inputs.architectures }}"
+          ARGS=(--name ahk.unitool.gsm --architectures "$ARCH")
+          if [ -n "$EXTRA" ]; then
+            ARGS+=(--add "$EXTRA")
+          fi
+          # Disable plugins we do not ship inside Uni Tool
+          ARGS+=(--disable-tasker --disable-float --disable-widget --disable-api --disable-boot --disable-styling --disable-x11 || true)
+          chmod +x ./build-termux.sh
+          ./build-termux.sh "${ARGS[@]}" || ./build-termux.sh --name ahk.unitool.gsm --architectures "$ARCH"
+
+      - name: Collect bootstrap zip
+        run: |
+          set -e
+          mkdir -p dist
+          # generator output locations vary; search
+          find termux-generator -name 'bootstrap-aarch64.zip' -o -name 'bootstrap-*.zip' 2>/dev/null | head -20
+          BOOT=$(find termux-generator -name 'bootstrap-aarch64.zip' 2>/dev/null | head -1)
+          if [ -z "$BOOT" ]; then
+            BOOT=$(find termux-generator -name 'bootstrap-*.zip' 2>/dev/null | head -1)
+          fi
+          if [ -z "$BOOT" ]; then
+            echo "No bootstrap zip found — listing termux-generator"
+            find termux-generator -type f -name '*.zip' | head -40
+            exit 1
+          fi
+          cp "$BOOT" dist/bootstrap-aarch64.zip
+          echo "custom ahk.unitool.gsm" > dist/bootstrap.meta
+          ls -lh dist/
+
+      - name: Upload bootstrap artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: termux-bootstrap-ahk.unitool.gsm
+          path: dist/
+          retention-days: 90
+
+      - name: Upload to GitHub Release (termux-bootstrap tag)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: termux-bootstrap
+          name: Termux bootstrap for ahk.unitool.gsm
+          body: |
+            Bootstrap rebuilt for **ahk.unitool.gsm** (termux-generator).
+            Place as `app/src/main/assets/termux/bootstrap-aarch64.zip` with `bootstrap.meta` containing `custom`.
+          files: |
+            dist/bootstrap-aarch64.zip
+            dist/bootstrap.meta
+          token: ${{ secrets.GITHUB_TOKEN }}
