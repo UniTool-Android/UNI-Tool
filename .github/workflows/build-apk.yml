@@ -37,8 +37,15 @@ jobs:
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: r27
+          ndk-version: r25c
           link-to-sdk: true
+
+      - name: Build Adbify terminal AAR
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          chmod +x scripts/build-adbify-terminal.sh
+          ./scripts/build-adbify-terminal.sh
 
       - name: Build debug APK
         env:
