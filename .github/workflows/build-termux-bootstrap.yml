@@ -6,6 +6,12 @@ name: Build Termux bootstrap (ahk.unitool.gsm)
 
 on:
   workflow_dispatch:
+  # Also listed when default branch updates this file
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-termux-bootstrap.yml'
+
     inputs:
       architectures:
         description: "Bootstrap architectures (comma-separated)"
