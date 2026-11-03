@@ -7,7 +7,6 @@ import ahk.unitool.gsm.protocol.fastboot.FastbootClient
 import ahk.unitool.gsm.protocol.mtk.MtkBrom
 import ahk.unitool.gsm.shell.PtySession
 import ahk.unitool.gsm.shell.ShellSession
-import ahk.unitool.gsm.termux.TermuxEnv
 import ahk.unitool.gsm.usb.UsbTransport
 import android.hardware.usb.UsbDevice
 import android.os.Bundle
@@ -27,7 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Terminal-first UI: Termux shell by default, USB device info on the title bar.
+ * Terminal-first UI: app-private native shell and USB Host tools.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -71,17 +70,12 @@ class MainActivity : AppCompatActivity() {
             } else false
         }
 
-        append("Uni Tool — Termux shell + USB Host\n")
+        append("Uni Tool — native shell + USB Host\n")
         append("native=${NativeBridge.selfTest()}\n")
         updateTitleBar(null)
 
-        lifecycleScope.launch {
-            append("Installing Termux bootstrap (first run may take a minute)…\n")
-            val ok = withContext(Dispatchers.IO) { TermuxEnv.install(this@MainActivity) }
-            append(if (ok) "Termux ready\n" else "Termux install failed — missing bootstrap asset\n")
-            refreshDevices()
-            startShell(force = false)
-        }
+        refreshDevices()
+        startShell(force = false)
     }
 
     override fun onResume() {
@@ -258,9 +252,8 @@ class MainActivity : AppCompatActivity() {
         pty?.stop()
         shellStarted = true
         val fd = PtySession.currentUsbFd(this) ?: ShellSession.currentUsbFd(this)
-        append("starting Termux shell USB_FD=${fd ?: "-"} native=${NativeBridge.available}…\n")
+        append("starting app-private shell USB_FD=${fd ?: "-"} native=${NativeBridge.available}…\n")
         lifecycleScope.launch(Dispatchers.IO) {
-            TermuxEnv.install(this@MainActivity)
             withContext(Dispatchers.Main) {
                 if (NativeBridge.available) {
                     pty = PtySession(
@@ -273,7 +266,8 @@ class MainActivity : AppCompatActivity() {
                             }
                         },
                     )
-                    pty?.start(fd)
+                    val session = pty
+                    withContext(Dispatchers.IO) { session?.start(fd) }
                 } else {
                     shell = ShellSession(
                         this@MainActivity,
@@ -285,7 +279,8 @@ class MainActivity : AppCompatActivity() {
                             }
                         },
                     )
-                    shell?.start(fd)
+                    val session = shell
+                    withContext(Dispatchers.IO) { session?.start(fd) }
                 }
             }
         }
