@@ -15,6 +15,11 @@ on:
         required: false
         default: ""
 
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-termux-bootstrap.yml'
+
 concurrency:
   group: termux-bootstrap
   cancel-in-progress: false
