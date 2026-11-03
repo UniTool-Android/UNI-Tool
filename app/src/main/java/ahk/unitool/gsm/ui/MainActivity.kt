@@ -63,6 +63,15 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnNativeUsb).setOnClickListener { runNativeUsbTest() }
         findViewById<Button>(R.id.btnShell).setOnClickListener { startShell(force = true) }
         findViewById<Button>(R.id.btnSend).setOnClickListener { sendLine() }
+        bindTerminalKey(R.id.keyEsc, "\u001b")
+        bindTerminalKey(R.id.keyTab, "\t")
+        bindTerminalKey(R.id.keyCtrlC, "\u0003")
+        bindTerminalKey(R.id.keyCtrlD, "\u0004")
+        bindTerminalKey(R.id.keyCtrlZ, "\u001a")
+        bindTerminalKey(R.id.keyUp, "\u001b[A")
+        bindTerminalKey(R.id.keyDown, "\u001b[B")
+        bindTerminalKey(R.id.keyRight, "\u001b[C")
+        bindTerminalKey(R.id.keyLeft, "\u001b[D")
         input.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND || actionId == EditorInfo.IME_ACTION_DONE) {
                 sendLine()
@@ -92,9 +101,21 @@ class MainActivity : AppCompatActivity() {
     private fun sendLine() {
         val line = input.text?.toString().orEmpty()
         if (line.isEmpty()) return
-        append("$ $line\n")
-        if (pty != null) pty?.write(line + "\n") else shell?.write(line)
+        if (pty != null) {
+            // A PTY echoes input itself; manually appending here duplicates the prompt/command.
+            pty?.write(line + "\n")
+        } else {
+            append("$ $line\n")
+            shell?.write(line)
+        }
         input.setText("")
+    }
+
+    private fun bindTerminalKey(viewId: Int, sequence: String) {
+        findViewById<Button>(viewId).setOnClickListener {
+            if (pty != null) pty?.write(sequence) else shell?.write(sequence)
+            input.requestFocus()
+        }
     }
 
     private fun updateTitleBar(device: UsbDevice?) {
