@@ -47,10 +47,11 @@ class CoroutineTest {
 
     @Test
     fun sharedFlow_emitAndCollect() = runTest {
-        val flow = MutableSharedFlow<String>(extraBufferCapacity = 1)
-        val job = async { flow.first() }
+        // replay=1 so a late subscriber still sees the event (avoids UncompletedCoroutinesError
+        // when async collector is scheduled after emit under StandardTestDispatcher).
+        val flow = MutableSharedFlow<String>(replay = 1)
         flow.emit("usb-attached")
-        assertThat(job.await()).isEqualTo("usb-attached")
+        assertThat(flow.first()).isEqualTo("usb-attached")
     }
 
     @Test
