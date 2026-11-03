@@ -21,7 +21,7 @@ APK: app/build/outputs/apk/debug/app-debug.apk.
 
 The shell uses Android's built-in /system/bin/sh. It creates working directories inside app-private storage and exposes its bin and lib paths. No root access, external storage permission, bootstrap archive, or network installation is needed.
 
-Android-compatible command binaries should be staged into app/src/main/assets/tools/arm64-v8a/ and copied to app-private bin by a dedicated packaging task before being advertised as available. Executables and JNI shared libraries are different artifact types; do not load command-line executables with System.loadLibrary. This repository does not import proprietary binaries from third-party APKs.
+Android-compatible command binaries placed in app/src/main/assets/tools/arm64-v8a/ are copied to app-private bin at startup. Shared libraries placed in app/src/main/assets/tools/lib/arm64-v8a/ are copied to app-private lib. Only compatible, legally redistributable binaries should be packaged. Executables and JNI shared libraries are different artifact types; do not load command-line executables with System.loadLibrary. This repository does not import proprietary binaries from third-party APKs.
 
 ## USB and protocol notes
 
