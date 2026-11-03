@@ -1,0 +1,39 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Gradle
+.gradle/
+build/
+**/build/
+local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Native / CMake
+.cxx/
+.externalNativeBuild/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Captures / logs
+*.log
+captures/
+
+# Kotlin
+.kotlin/
+
+# Dist output (local builds)
+dist/
+
+# NDK
+obj/
+libs/
+app/src/main/assets/termux/bootstrap-aarch64.zip

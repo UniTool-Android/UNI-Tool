@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <Spinner
+        android:id="@+id/deviceSpinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <Button android:id="@+id/btnRefresh" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Refresh" />
+            <Button android:id="@+id/btnPermission" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Permission" />
+            <Button android:id="@+id/btnOpen" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Open" />
+            <Button android:id="@+id/btnFastboot" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Fastboot" />
+            <Button android:id="@+id/btnAdb" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ADB" />
+            <Button android:id="@+id/btnMtk" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="MTK" />
+            <Button android:id="@+id/btnNativeUsb" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="NativeUSB" />
+            <Button android:id="@+id/btnShell" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Shell" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <ScrollView
+        android:id="@+id/scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#111111"
+        android:fillViewport="true">
+        <TextView
+            android:id="@+id/logView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:padding="8dp"
+            android:textColor="#00FF88"
+            android:textSize="12sp"
+            android:textIsSelectable="true" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:id="@+id/input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="shell command"
+            android:imeOptions="actionSend"
+            android:inputType="text"
+            android:singleLine="true" />
+        <Button
+            android:id="@+id/btnSend"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Send" />
+    </LinearLayout>
+</LinearLayout>

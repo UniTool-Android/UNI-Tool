@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Catch-all: any device class (user grants per-device permission) -->
+    <usb-device class="255" subclass="66" protocol="1" />
+    <!-- ADB -->
+    <usb-device class="255" subclass="66" protocol="1" />
+    <!-- Common MediaTek VID -->
+    <usb-device vendor-id="3725" />
+    <!-- Google -->
+    <usb-device vendor-id="6353" />
+</resources>
