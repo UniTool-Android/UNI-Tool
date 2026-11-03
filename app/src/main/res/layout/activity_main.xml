@@ -1,39 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:background="#0D0D0D">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="#1B5E20"
+        android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar"
+        app:title="Uni Tool"
+        app:subtitle="No USB device"
+        app:titleTextColor="#FFFFFF"
+        app:subtitleTextColor="#C8E6C9" />
+
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#121212"
+        android:scrollbars="none">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="4dp">
+            <Button android:id="@+id/btnRefresh" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Refresh" android:textSize="12sp" />
+            <Button android:id="@+id/btnPermission" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Permission" android:textSize="12sp" />
+            <Button android:id="@+id/btnOpen" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Open" android:textSize="12sp" />
+            <Button android:id="@+id/btnFastboot" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Fastboot" android:textSize="12sp" />
+            <Button android:id="@+id/btnAdb" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="ADB" android:textSize="12sp" />
+            <Button android:id="@+id/btnMtk" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="MTK" android:textSize="12sp" />
+            <Button android:id="@+id/btnNativeUsb" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="NativeUSB" android:textSize="12sp" />
+            <Button android:id="@+id/btnShell" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Restart shell" android:textSize="12sp" />
+        </LinearLayout>
+    </HorizontalScrollView>
 
     <Spinner
         android:id="@+id/deviceSpinner"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
-
-    <HorizontalScrollView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-            <Button android:id="@+id/btnRefresh" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Refresh" />
-            <Button android:id="@+id/btnPermission" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Permission" />
-            <Button android:id="@+id/btnOpen" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Open" />
-            <Button android:id="@+id/btnFastboot" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Fastboot" />
-            <Button android:id="@+id/btnAdb" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ADB" />
-            <Button android:id="@+id/btnMtk" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="MTK" />
-            <Button android:id="@+id/btnNativeUsb" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="NativeUSB" />
-            <Button android:id="@+id/btnShell" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Shell" />
-        </LinearLayout>
-    </HorizontalScrollView>
+        android:layout_height="wrap_content"
+        android:background="#1A1A1A"
+        android:padding="4dp" />
 
     <ScrollView
         android:id="@+id/scroll"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="#111111"
+        android:background="#000000"
         android:fillViewport="true">
         <TextView
             android:id="@+id/logView"
@@ -49,20 +66,37 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:background="#111111"
+        android:padding="4dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="$ "
+            android:textColor="#00FF88"
+            android:fontFamily="monospace"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp" />
         <EditText
             android:id="@+id/input"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:hint="shell command"
+            android:background="@android:color/transparent"
+            android:hint="command"
+            android:textColorHint="#446644"
+            android:textColor="#00FF88"
+            android:fontFamily="monospace"
             android:imeOptions="actionSend"
             android:inputType="text"
-            android:singleLine="true" />
+            android:singleLine="true"
+            android:textSize="13sp" />
         <Button
             android:id="@+id/btnSend"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Send" />
+            android:text="Enter"
+            android:textColor="#69F0AE" />
     </LinearLayout>
 </LinearLayout>

@@ -21,6 +21,8 @@ object TermuxEnv {
 
     private const val TAG = "TermuxEnv"
     private const val ASSET = "termux/bootstrap-aarch64.zip"
+    private const val BOOTSTRAP_URL =
+        "https://github.com/termux/termux-packages/releases/download/bootstrap-2026.11.01-r1%2Bapt.android-7/bootstrap-aarch64.zip"
     private const val STAMP = "bootstrap-2026.11.01-r1"
     const val FAKE_FILES = "/data/data/com.termux/files"
 
@@ -50,7 +52,7 @@ object TermuxEnv {
         }
         Log.i(TAG, "extracting Termux bootstrap → $prefix")
         try {
-            ctx.assets.open(ASSET).use { input ->
+            openBootstrapStream(ctx).use { input ->
                 ZipInputStream(input).use { zis ->
                     val buf = ByteArray(64 * 1024)
                     var entry = zis.nextEntry

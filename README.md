@@ -95,3 +95,10 @@ CLASS=ahk.unitool.gsm.protocol.fastboot.FastbootProtocolTest ./scripts/test.sh u
 ```
 
 See [TESTING.md](TESTING.md) for the full test map.
+
+
+## Terminal UI
+
+- Termux shell starts by default after bootstrap extract
+- Toolbar subtitle shows connected USB `vid:pid`, path, permission, and `fd` when open
+- Bootstrap asset: `app/src/main/assets/termux/bootstrap-aarch64.zip`
