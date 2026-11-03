@@ -49,8 +49,8 @@ jobs:
         working-directory: termux-generator
         run: |
           set -e
-          EXTRA="${{ github.event.inputs.extra_packages }}"
-          ARCH="${{ github.event.inputs.architectures }}"
+          EXTRA="${{ inputs.extra_packages || '' }}"
+          ARCH="${{ inputs.architectures || 'aarch64' }}"
           ARGS=(--name ahk.unitool.gsm --architectures "$ARCH")
           if [ -n "$EXTRA" ]; then
             ARGS+=(--add "$EXTRA")
