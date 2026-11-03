@@ -79,6 +79,8 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    // Termux terminal emulator/view: real PTY terminal rendering and IME input.
+    implementation("com.termux.termux-app:terminal-view:0.118.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     // ---- Unit tests (JVM) ----
