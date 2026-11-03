@@ -1,8 +1,7 @@
 name: Build Termux bootstrap (ahk.unitool.gsm)
 
-# Rebuilds Termux packages/bootstrap for applicationId ahk.unitool.gsm
-# (same approach as termux-generator / VHEditor — native PREFIX, no proot).
-# Runtime: often 2–4+ hours. Manual dispatch only.
+# Rebuilds the native Termux bootstrap for applicationId ahk.unitool.gsm.
+# Manual dispatch only for expensive builds (typically 2–4+ hours).
 
 on:
   workflow_dispatch:
@@ -25,11 +24,18 @@ concurrency:
   group: termux-bootstrap
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
   bootstrap:
     name: Generate bootstrap for ahk.unitool.gsm
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    env:
+      TERMUX_ARCHITECTURES: ${{ inputs.architectures || 'aarch64' }}
+      TERMUX_EXTRA_PACKAGES: ${{ inputs.extra_packages || '' }}
+
     steps:
       - name: Checkout termux-generator
         uses: actions/checkout@v4
@@ -40,46 +46,77 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
 
-      - name: Dependencies
+      - name: Install build dependencies
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jdk git patch curl unzip
 
+      - name: Validate build inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCH="${TERMUX_ARCHITECTURES:-aarch64}"
+          EXTRA="${TERMUX_EXTRA_PACKAGES:-}"
+          if [[ -z "$ARCH" ]]; then
+            ARCH="aarch64"
+          fi
+          if [[ ! "$ARCH" =~ ^[a-zA-Z0-9_,.-]+$ ]]; then
+            echo "::error::Invalid architecture list: $ARCH"
+            exit 1
+          fi
+          if [[ -n "$EXTRA" && ! "$EXTRA" =~ ^[a-zA-Z0-9+_.:,,-]+$ ]]; then
+            echo "::error::Invalid extra package list: $EXTRA"
+            exit 1
+          fi
+          echo "Using architectures: $ARCH"
+          echo "Extra packages: ${EXTRA:-<none>}"
+
       - name: Build Termux (custom package name)
         working-directory: termux-generator
+        shell: bash
         run: |
-          set -e
-          EXTRA="${{ inputs.extra_packages || '' }}"
-          ARCH="${{ inputs.architectures || 'aarch64' }}"
+          set -euo pipefail
+          ARCH="${TERMUX_ARCHITECTURES:-aarch64}"
+          EXTRA="${TERMUX_EXTRA_PACKAGES:-}"
+          [[ -n "$ARCH" ]] || ARCH="aarch64"
+
           ARGS=(--name ahk.unitool.gsm --architectures "$ARCH")
-          if [ -n "$EXTRA" ]; then
+          if [[ -n "$EXTRA" ]]; then
             ARGS+=(--add "$EXTRA")
           fi
-          # Disable plugins we do not ship inside Uni Tool
-          ARGS+=(--disable-tasker --disable-float --disable-widget --disable-api --disable-boot --disable-styling --disable-x11)
+
+          # Disable optional companion apps not shipped by Uni Tool.
+          ARGS+=(
+            --disable-tasker
+            --disable-float
+            --disable-widget
+            --disable-api
+            --disable-boot
+            --disable-styling
+            --disable-x11
+          )
+
           chmod +x ./build-termux.sh
-          if ! ./build-termux.sh "${ARGS[@]}"; then
-            echo "Optional plugin flags unsupported; retrying with required arguments only"
-            ./build-termux.sh --name ahk.unitool.gsm --architectures "$ARCH"
-          fi
+          printf 'Running: ./build-termux.sh'
+          printf ' %q' "${ARGS[@]}"
+          printf '\n'
+          ./build-termux.sh "${ARGS[@]}"
 
       - name: Collect bootstrap zip
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           mkdir -p dist
-          # generator output locations vary; search
-          find termux-generator -name 'bootstrap-aarch64.zip' -o -name 'bootstrap-*.zip' 2>/dev/null | head -20
-          BOOT=$(find termux-generator -name 'bootstrap-aarch64.zip' 2>/dev/null | head -1)
-          if [ -z "$BOOT" ]; then
-            BOOT=$(find termux-generator -name 'bootstrap-*.zip' 2>/dev/null | head -1)
-          fi
-          if [ -z "$BOOT" ]; then
-            echo "No bootstrap zip found — listing termux-generator"
-            find termux-generator -type f -name '*.zip' | head -40
+          BOOT="$(find termux-generator -type f \\( -name 'bootstrap-aarch64.zip' -o -name 'bootstrap-*.zip' \\) -print -quit)"
+          if [[ -z "$BOOT" ]]; then
+            echo "::error::No bootstrap ZIP was produced"
+            find termux-generator -type f -name '*.zip' -print | head -40 || true
             exit 1
           fi
           cp "$BOOT" dist/bootstrap-aarch64.zip
-          echo "custom ahk.unitool.gsm" > dist/bootstrap.meta
+          printf '%s\n' "custom ahk.unitool.gsm" > dist/bootstrap.meta
+          unzip -t dist/bootstrap-aarch64.zip
           ls -lh dist/
 
       - name: Upload bootstrap artifact
@@ -87,6 +124,7 @@ jobs:
         with:
           name: termux-bootstrap-ahk.unitool.gsm
           path: dist/
+          if-no-files-found: error
           retention-days: 90
 
       - name: Upload to GitHub Release (termux-bootstrap tag)
