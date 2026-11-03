@@ -103,18 +103,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          BOOT="$(find termux-generator -type f -name 'bootstrap-aarch64.zip' -print -quit)"
-          if [[ -z "$BOOT" ]]; then
-            BOOT="$(find termux-generator -type f -name 'bootstrap-*.zip' -print -quit)"
-          fi
-          if [[ -z "$BOOT" ]]; then
+          mapfile -d '' -t BOOTS < <(find termux-generator -type f -name 'bootstrap-*.zip' -print0)
+          if (( ${#BOOTS[@]} == 0 )); then
             echo "::error::No bootstrap ZIP was produced"
             find termux-generator -type f -name '*.zip' -print | head -40 || true
             exit 1
           fi
-          cp "$BOOT" dist/bootstrap-aarch64.zip
+          for BOOT in "${BOOTS[@]}"; do
+            cp "$BOOT" "dist/$(basename "$BOOT")"
+            unzip -t "dist/$(basename "$BOOT")"
+          done
+          if [[ ! -f dist/bootstrap-aarch64.zip ]]; then
+            echo "::warning::No aarch64 bootstrap was generated; the Android app currently expects bootstrap-aarch64.zip"
+          fi
           printf '%s\n' "custom ahk.unitool.gsm" > dist/bootstrap.meta
-          unzip -t dist/bootstrap-aarch64.zip
           ls -lh dist/
 
       - name: Upload bootstrap artifact
@@ -134,6 +136,6 @@ jobs:
             Bootstrap rebuilt for **ahk.unitool.gsm** (termux-generator).
             Place as `app/src/main/assets/termux/bootstrap-aarch64.zip` with `bootstrap.meta` containing `custom`.
           files: |
-            dist/bootstrap-aarch64.zip
+            dist/bootstrap-*.zip
             dist/bootstrap.meta
           token: ${{ secrets.GITHUB_TOKEN }}
