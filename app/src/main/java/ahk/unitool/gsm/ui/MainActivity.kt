@@ -10,6 +10,7 @@ import ahk.unitool.gsm.usb.UsbTransport
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Color
 import android.hardware.usb.UsbDevice
 import android.os.Bundle
 import android.util.Log
@@ -22,6 +23,10 @@ import android.widget.Button
 import android.widget.Spinner
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
 import com.termux.terminal.TerminalSession
@@ -43,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private var terminalSession: TerminalSession? = null
     private var ctrlPressed = false
     private var altPressed = false
+    private var terminalFontSizeDp = 14f
 
     private val terminalSessionClient = object : TerminalSessionClient {
         override fun onTextChanged(changedSession: TerminalSession) { runOnUiThread { terminalView.invalidate() } }
@@ -70,7 +76,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val terminalViewClient = object : TerminalViewClient {
-        override fun onScale(scale: Float): Float = 1f
+        override fun onScale(scale: Float): Float {
+            if (scale > 1.08f) {
+                terminalFontSizeDp = (terminalFontSizeDp + 1f).coerceAtMost(22f)
+                applyTerminalFontSize()
+                return 1f
+            }
+            if (scale < 0.92f) {
+                terminalFontSizeDp = (terminalFontSizeDp - 1f).coerceAtLeast(9f)
+                applyTerminalFontSize()
+                return 1f
+            }
+            return 1f
+        }
         override fun onSingleTapUp(e: MotionEvent) {
             terminalView.requestFocus()
             (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
@@ -100,7 +118,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
         setContentView(R.layout.activity_main)
+        applyWindowInsets()
         transport = UsbTransport.get(this)
         toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
@@ -108,7 +131,7 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         deviceSpinner = findViewById(R.id.deviceSpinner)
         terminalView.setTerminalViewClient(terminalViewClient)
-        terminalView.setTextSize(14)
+        applyTerminalFontSize()
         terminalView.setKeepScreenOn(true)
 
         findViewById<Button>(R.id.btnRefresh).setOnClickListener { refreshDevices() }
@@ -143,6 +166,34 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() { super.onResume(); refreshDevices() }
     override fun onDestroy() { terminalSession?.finishIfRunning(); terminalSession = null; super.onDestroy() }
+
+    /** Apply system-bar and IME insets so the toolbar never sits under the status bar
+     * and the terminal extra-key strip remains above the software keyboard. */
+    private fun applyWindowInsets() {
+        val root = findViewById<View>(R.id.mainRoot)
+        val initialLeft = root.paddingLeft
+        val initialTop = root.paddingTop
+        val initialRight = root.paddingRight
+        val initialBottom = root.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            view.setPadding(
+                initialLeft + bars.left,
+                initialTop + bars.top,
+                initialRight + bars.right,
+                initialBottom + maxOf(bars.bottom, ime.bottom)
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
+    }
+
+    /** TerminalRenderer paints in physical pixels; convert our user-facing dp size. */
+    private fun applyTerminalFontSize() {
+        val px = (terminalFontSizeDp * resources.displayMetrics.density + 0.5f).toInt()
+        terminalView.setTextSize(px)
+    }
 
     private fun startTerminal() {
         val runtime = ShellRuntime.get(this)
