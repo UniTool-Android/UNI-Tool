@@ -13,7 +13,7 @@ class ShellRuntime private constructor(context: Context) {
     val init = File(root, "init.sh")
     init {
         listOf(bin, lib, home, tmp).forEach { it.mkdirs() }
-        if (!init.exists()) init.writeText(INIT_SCRIPT)
+        init.writeText(INIT_SCRIPT)
     }
     fun shellCommand(): Pair<String, Array<String>> = "/system/bin/sh" to arrayOf("-i")
     fun environment(usbFd: Int? = null): Array<String> {
