@@ -163,37 +163,76 @@ object TermuxEnv {
         }
     }
 
-    /** argv: executable + args for interactive login shell. */
+    /**
+     * Termux packages hardcode [FAKE_FILES] (`/data/data/com.termux/files`).
+     * Our app lives under `/data/data/ahk.unitool.gsm/files`.
+     * proot binds real filesDir → FAKE_FILES so ELF RPATHs and scripts resolve.
+     * PROOT_TMP_DIR must be a real, writable host path (not the fake one).
+     */
     fun shellCommand(ctx: Context): Pair<String, Array<String>> {
         install(ctx)
+        prepareProotDirs()
         val bash = File(prefix, "bin/bash")
         val proot = File(filesDir, "proot")
+        val hostFiles = filesDir.absolutePath
         return if (proot.canExecute() && bash.exists()) {
-            proot.absolutePath to arrayOf(
-                "-b", "${filesDir.absolutePath}:$FAKE_FILES",
+            val args = arrayOf(
+                "--link2symlink",
+                "-b", "$hostFiles:$FAKE_FILES",
+                "-b", "/system:/system",
+                "-b", "/vendor:/vendor",
+                "-b", "/sys:/sys",
+                "-b", "/dev:/dev",
+                "-b", "/proc:/proc",
+                "-b", "/sdcard:/sdcard",
                 "-w", "$FAKE_FILES/home",
                 "$FAKE_FILES/usr/bin/bash",
                 "--login",
             )
+            proot.absolutePath to args
         } else if (bash.exists()) {
+            // Last resort without proot — many Termux ELFs will still break
             bash.absolutePath to arrayOf("--login")
         } else {
             "/system/bin/sh" to emptyArray()
         }
     }
 
+    private fun prepareProotDirs() {
+        val prootTmp = File(filesDir, "proot-tmp")
+        listOf(
+            prootTmp,
+            home,
+            File(prefix, "tmp"),
+            File(prefix, "var/tmp"),
+            File(prefix, "etc"),
+            File(filesDir, "tmp"),
+        ).forEach { d ->
+            if (!d.exists()) d.mkdirs()
+        }
+    }
+
     fun buildEnv(ctx: Context, usbFd: Int? = null): Array<String> {
         ensure(ctx)
+        prepareProotDirs()
+        val hostFiles = filesDir.absolutePath
+        val prootTmp = File(filesDir, "proot-tmp").absolutePath
+        // Inside proot, processes should see Termux-style paths (FAKE_FILES).
+        // proot itself needs PROOT_TMP_DIR on the real host filesystem.
         val list = mutableListOf(
-            "HOME=${home.absolutePath}",
-            "PREFIX=${prefix.absolutePath}",
-            "TMPDIR=${prefix.absolutePath}/tmp",
-            "PATH=${prefix.absolutePath}/bin:/system/bin",
-            "LD_LIBRARY_PATH=${prefix.absolutePath}/lib:${filesDir.absolutePath}",
+            "HOME=$FAKE_FILES/home",
+            "PREFIX=$FAKE_FILES/usr",
+            "TMPDIR=$FAKE_FILES/usr/tmp",
+            "PATH=$FAKE_FILES/usr/bin:/system/bin",
+            "LD_LIBRARY_PATH=$FAKE_FILES/usr/lib:$hostFiles",
+            "PROOT_TMP_DIR=$prootTmp",
+            "PROOT_TMPDIR=$prootTmp",
             "TERM=xterm-256color",
             "LANG=en_US.UTF-8",
             "EXTERNAL_STORAGE=/sdcard",
+            "TERMUX_VERSION=unitool",
             "UNITOOL=1",
+            "UNITOOL_FILES=$hostFiles",
         )
         if (usbFd != null && usbFd >= 0) {
             list += "USB_FD=$usbFd"
