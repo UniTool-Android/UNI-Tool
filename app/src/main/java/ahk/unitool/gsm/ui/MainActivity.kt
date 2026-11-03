@@ -5,55 +5,180 @@ import ahk.unitool.gsm.native.NativeBridge
 import ahk.unitool.gsm.protocol.adb.AdbHost
 import ahk.unitool.gsm.protocol.fastboot.FastbootClient
 import ahk.unitool.gsm.protocol.mtk.MtkBrom
-import ahk.unitool.gsm.shell.PtySession
-import ahk.unitool.gsm.shell.ShellSession
-import ahk.unitool.gsm.termux.TermuxEnv
+import ahk.unitool.gsm.shell.ShellRuntime
 import ahk.unitool.gsm.usb.UsbTransport
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.graphics.Color
 import android.hardware.usb.UsbDevice
 import android.os.Bundle
+import android.util.Log
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
-import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.EditText
-import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.adbify.terminal.TerminalContextProvider
+import com.adbify.terminal.TerminalSession
+import com.adbify.terminal.TerminalSessionClient
+import com.adbify.terminal.view.TerminalView
+import com.adbify.terminal.view.TerminalViewClient
 import com.google.android.material.appbar.MaterialToolbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Terminal-first UI: Termux shell by default, USB device info on the title bar.
+ * Uni Tool terminal screen using Adbify's native PTY-backed terminal implementation.
+ * The terminal emulator, renderer, IME connection and PTY JNI layer are supplied by
+ * the pinned Adbify terminalview module; UniTool retains its own USB/protocol controls.
  */
 class MainActivity : AppCompatActivity() {
-
     private lateinit var transport: UsbTransport
     private lateinit var toolbar: MaterialToolbar
-    private lateinit var logView: TextView
-    private lateinit var scroll: ScrollView
-    private lateinit var input: EditText
+    private lateinit var terminalView: TerminalView
+    private lateinit var statusText: TextView
     private lateinit var deviceSpinner: Spinner
-
     private var devices: List<UsbDevice> = emptyList()
-    private var shell: ShellSession? = null
-    private var pty: PtySession? = null
-    private var shellStarted = false
+    private var terminalSession: TerminalSession? = null
+    private var ctrlPressed = false
+    private var altPressed = false
+    private var terminalFontSizeDp = 12f
+
+    private val terminalSessionClient = object : TerminalSessionClient {
+        override fun onTextChanged(changedSession: TerminalSession) {
+            runOnUiThread { terminalView.invalidate() }
+        }
+
+        override fun onTitleChanged(changedSession: TerminalSession) {
+            runOnUiThread {
+                toolbar.subtitle = changedSession.title ?: toolbar.subtitle
+            }
+        }
+
+        override fun onSessionFinished(finishedSession: TerminalSession) {
+            runOnUiThread { append("Shell exited") }
+        }
+
+        override fun onCopyTextToClipboard(session: TerminalSession, text: String) {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("terminal", text))
+        }
+
+        override fun onPasteTextFromClipboard(session: TerminalSession?) {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = clipboard.primaryClip?.getItemAt(0)
+                ?.coerceToText(this@MainActivity)?.toString().orEmpty()
+            if (text.isNotEmpty()) writeTerminal(text)
+        }
+
+        override fun onBell(session: TerminalSession) {
+            terminalView.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+        }
+
+        override fun onColorsChanged(session: TerminalSession) {
+            runOnUiThread { terminalView.invalidate() }
+        }
+
+        override fun onTerminalCursorStateChange(state: Boolean) {
+            runOnUiThread { terminalView.invalidate() }
+        }
+
+        override fun setTerminalShellPid(session: TerminalSession, pid: Int) {
+            Log.i("UniToolTerminal", "PTY shell pid=$pid")
+        }
+
+        override fun getTerminalCursorStyle(): Int? = null
+
+        override fun logError(tag: String, message: String) { Log.e(tag, message) }
+        override fun logWarn(tag: String, message: String) { Log.w(tag, message) }
+        override fun logInfo(tag: String, message: String) { Log.i(tag, message) }
+        override fun logDebug(tag: String, message: String) { Log.d(tag, message) }
+        override fun logVerbose(tag: String, message: String) { Log.v(tag, message) }
+        override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) {
+            Log.e(tag, message, e)
+        }
+        override fun logStackTrace(tag: String, e: Exception) { Log.e(tag, e.message, e) }
+    }
+
+    private val terminalViewClient = object : TerminalViewClient {
+        override fun onScale(scale: Float): Float {
+            if (scale > 1.08f) {
+                terminalFontSizeDp = (terminalFontSizeDp + 1f).coerceAtMost(22f)
+                applyTerminalFontSize()
+                return 1f
+            }
+            if (scale < 0.92f) {
+                terminalFontSizeDp = (terminalFontSizeDp - 1f).coerceAtLeast(8f)
+                applyTerminalFontSize()
+                return 1f
+            }
+            return scale
+        }
+
+        override fun onSingleTapUp(e: MotionEvent) {
+            terminalView.requestFocus()
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+                .showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+        }
+
+        override fun shouldBackButtonBeMappedToEscape() = false
+        override fun shouldEnforceCharBasedInput() = true
+        override fun shouldUseCtrlSpaceWorkaround() = false
+        override fun isTerminalViewSelected() = true
+        override fun copyModeChanged(copyMode: Boolean) = Unit
+        override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession) = false
+        override fun onKeyUp(keyCode: Int, e: KeyEvent) = false
+        override fun onLongPress(event: MotionEvent) = false
+        override fun readControlKey() = ctrlPressed
+        override fun readAltKey() = altPressed
+        override fun readShiftKey() = false
+        override fun readFnKey() = false
+        override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession) = false
+        override fun onEmulatorSet() { runOnUiThread { terminalView.invalidate() } }
+        override fun logError(tag: String, message: String) { Log.e(tag, message) }
+        override fun logWarn(tag: String, message: String) { Log.w(tag, message) }
+        override fun logInfo(tag: String, message: String) { Log.i(tag, message) }
+        override fun logDebug(tag: String, message: String) { Log.d(tag, message) }
+        override fun logVerbose(tag: String, message: String) { Log.v(tag, message) }
+        override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) {
+            Log.e(tag, message, e)
+        }
+        override fun logStackTrace(tag: String, e: Exception) { Log.e(tag, e.message, e) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
 
+        // Adbify's JNI fallback loader resolves its application Context through this provider.
+        TerminalContextProvider.init(applicationContext)
+
+        setContentView(R.layout.activity_main)
+        applyWindowInsets()
         transport = UsbTransport.get(this)
         toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
-        logView = findViewById(R.id.logView)
-        scroll = findViewById(R.id.scroll)
-        input = findViewById(R.id.input)
+        terminalView = findViewById(R.id.terminalView)
+        statusText = findViewById(R.id.statusText)
         deviceSpinner = findViewById(R.id.deviceSpinner)
+
+        terminalView.setTerminalViewClient(terminalViewClient)
+        applyTerminalFontSize()
+        terminalView.setKeepScreenOn(true)
 
         findViewById<Button>(R.id.btnRefresh).setOnClickListener { refreshDevices() }
         findViewById<Button>(R.id.btnPermission).setOnClickListener { requestSelectedPermission() }
@@ -62,26 +187,33 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnAdb).setOnClickListener { runAdbProbe() }
         findViewById<Button>(R.id.btnMtk).setOnClickListener { runMtkProbe() }
         findViewById<Button>(R.id.btnNativeUsb).setOnClickListener { runNativeUsbTest() }
-        findViewById<Button>(R.id.btnShell).setOnClickListener { startShell(force = true) }
-        findViewById<Button>(R.id.btnSend).setOnClickListener { sendLine() }
-        input.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_SEND || actionId == EditorInfo.IME_ACTION_DONE) {
-                sendLine()
-                true
-            } else false
+        findViewById<Button>(R.id.btnShell).setOnClickListener { restartTerminal() }
+
+        bindTerminalKey(R.id.keyEsc, "\u001b")
+        bindTerminalKey(R.id.keyTab, "\t")
+        bindTerminalKey(R.id.keyHome, "\u001b[H")
+        bindTerminalKey(R.id.keyEnd, "\u001b[F")
+        bindTerminalKey(R.id.keyUp, "\u001b[A")
+        bindTerminalKey(R.id.keyDown, "\u001b[B")
+        bindTerminalKey(R.id.keyLeft, "\u001b[D")
+        bindTerminalKey(R.id.keyRight, "\u001b[C")
+        bindTerminalKey(R.id.keyMinus, "-")
+        bindTerminalKey(R.id.keyPipe, "|")
+        bindTerminalKey(R.id.keySlash, "/")
+        findViewById<Button>(R.id.keyCtrl).setOnClickListener {
+            ctrlPressed = !ctrlPressed
+            it.isSelected = ctrlPressed
+        }
+        findViewById<Button>(R.id.keyAlt).setOnClickListener {
+            altPressed = !altPressed
+            it.isSelected = altPressed
         }
 
-        append("Uni Tool — Termux shell + USB Host\n")
-        append("native=${NativeBridge.selfTest()}\n")
+        append("Adbify terminal initializing")
+        append("Native bridge: " + NativeBridge.selfTest())
         updateTitleBar(null)
-
-        lifecycleScope.launch {
-            append("Installing Termux bootstrap (first run may take a minute)…\n")
-            val ok = withContext(Dispatchers.IO) { TermuxEnv.install(this@MainActivity) }
-            append(if (ok) "Termux ready\n" else "Termux install failed — missing bootstrap asset\n")
-            refreshDevices()
-            startShell(force = false)
-        }
+        refreshDevices()
+        startTerminal()
     }
 
     override fun onResume() {
@@ -90,43 +222,97 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        shell?.stop()
-        pty?.stop()
+        terminalSession?.finishIfRunning()
+        terminalSession = null
         super.onDestroy()
     }
 
-    private fun sendLine() {
-        val line = input.text?.toString().orEmpty()
-        if (line.isEmpty()) return
-        append("$ $line\n")
-        if (pty != null) pty?.write(line + "\n") else shell?.write(line)
-        input.setText("")
+    /** Keep the UniTool toolbar clear of system bars and the extra-key row above the IME. */
+    private fun applyWindowInsets() {
+        val root = findViewById<View>(R.id.mainRoot)
+        val initialLeft = root.paddingLeft
+        val initialTop = root.paddingTop
+        val initialRight = root.paddingRight
+        val initialBottom = root.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            view.setPadding(
+                initialLeft + bars.left,
+                initialTop + bars.top,
+                initialRight + bars.right,
+                initialBottom + maxOf(bars.bottom, ime.bottom)
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
+    }
+
+    /** TerminalRenderer uses Paint.setTextSize(), so convert the Adbify dp preference to px. */
+    private fun applyTerminalFontSize() {
+        val px = (terminalFontSizeDp * resources.displayMetrics.density + 0.5f).toInt()
+        terminalView.setTextSize(px)
+    }
+
+    private fun startTerminal() {
+        val runtime = ShellRuntime.get(this)
+        val command = runtime.shellCommand()
+        val usbFd = transport.allSessions().firstOrNull()?.fileDescriptor
+        val session = TerminalSession(
+            command.first,
+            runtime.home.absolutePath,
+            command.second,
+            runtime.environment(usbFd),
+            2000,
+            terminalSessionClient
+        )
+        terminalSession = session
+        terminalView.attachSession(session)
+        terminalView.requestFocus()
+        terminalView.postDelayed({
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+                .showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+        }, 350)
+        append("Adbify PTY terminal ready")
+    }
+
+    private fun restartTerminal() {
+        terminalSession?.finishIfRunning()
+        terminalSession = null
+        startTerminal()
+    }
+
+    private fun writeTerminal(text: String) {
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        terminalSession?.write(bytes, 0, bytes.size)
+        terminalView.requestFocus()
+    }
+
+    private fun bindTerminalKey(viewId: Int, sequence: String) {
+        findViewById<Button>(viewId).setOnClickListener { writeTerminal(sequence) }
+    }
+
+    private fun append(message: String) {
+        statusText.text = message.replace('\n', ' ').takeLast(180)
     }
 
     private fun updateTitleBar(device: UsbDevice?) {
         toolbar.title = "Uni Tool"
         if (device == null) {
             val open = transport.allSessions().firstOrNull()
-            if (open != null) {
-                toolbar.subtitle = "%04x:%04x  fd=%d  %s".format(
-                    open.vendorId, open.productId, open.fileDescriptor, open.deviceName
-                )
-            } else if (devices.isNotEmpty()) {
-                val d = devices.first()
-                val perm = if (transport.hasPermission(d)) "OK" else "NEED_PERM"
-                toolbar.subtitle = "%04x:%04x  %s  [%s]".format(d.vendorId, d.productId, d.deviceName, perm)
-            } else {
-                toolbar.subtitle = "No USB device"
+            toolbar.subtitle = when {
+                open != null -> "%04x:%04x  %s".format(open.vendorId, open.productId, open.deviceName)
+                devices.isNotEmpty() -> {
+                    val d = devices.first()
+                    val perm = if (transport.hasPermission(d)) "OK" else "NEED_PERM"
+                    "%04x:%04x  %s  [%s]".format(d.vendorId, d.productId, d.deviceName, perm)
+                }
+                else -> "No USB device"
             }
             return
         }
         val perm = if (transport.hasPermission(device)) "OK" else "NEED_PERM"
-        val session = transport.session(device.deviceName)
-        toolbar.subtitle = if (session != null) {
-            "%04x:%04x  fd=%d  [%s]".format(device.vendorId, device.productId, session.fileDescriptor, perm)
-        } else {
-            "%04x:%04x  %s  [%s]".format(device.vendorId, device.productId, device.deviceName, perm)
-        }
+        toolbar.subtitle = "%04x:%04x  %s  [%s]".format(device.vendorId, device.productId, device.deviceName, perm)
     }
 
     private fun refreshDevices() {
@@ -149,150 +335,84 @@ class MainActivity : AppCompatActivity() {
             ) {
                 updateTitleBar(devices.getOrNull(position))
             }
+
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {
                 updateTitleBar(null)
             }
         }
         updateTitleBar(devices.firstOrNull())
-        if (devices.isNotEmpty()) {
-            append("USB devices: ${devices.size}\n")
-            labels.forEach { append("  $it\n") }
-        }
     }
 
-    private fun selectedDevice(): UsbDevice? =
-        devices.getOrNull(deviceSpinner.selectedItemPosition)
+    private fun selectedDevice(): UsbDevice? = devices.getOrNull(deviceSpinner.selectedItemPosition)
 
     private fun requestSelectedPermission() {
-        val d = selectedDevice() ?: return append("No device\n")
+        val d = selectedDevice() ?: return append("No USB device")
         transport.requestPermission(d) { granted ->
             runOnUiThread {
-                append("permission ${d.deviceName}: $granted\n")
+                append("USB permission: " + granted)
                 refreshDevices()
             }
         }
     }
 
     private fun openSelected() {
-        val d = selectedDevice() ?: return append("No device\n")
+        val d = selectedDevice() ?: return append("No USB device")
         lifecycleScope.launch {
             val session = withContext(Dispatchers.IO) { transport.open(d) }
-            if (session == null) append("open failed (permission?)\n")
+            if (session == null) append("USB open failed (permission required)")
             else {
-                append("opened fd=${session.fileDescriptor} in=${session.epIn?.address} out=${session.epOut?.address}\n")
+                append("USB opened · fd=" + session.fileDescriptor)
                 updateTitleBar(d)
-                startShell(force = true)
             }
         }
     }
 
     private fun runFastbootProbe() {
-        val d = selectedDevice() ?: return append("No device\n")
+        val d = selectedDevice() ?: return append("No USB device")
         lifecycleScope.launch {
             val session = withContext(Dispatchers.IO) { transport.open(d) }
-                ?: return@launch append("open failed\n")
-            updateTitleBar(d)
-            val client = FastbootClient(transport, session)
-            val r = withContext(Dispatchers.IO) { client.getVar("product") }
-            append("fastboot getvar:product → ${r.status} ${r.data}\n")
+                ?: return@launch append("Fastboot open failed")
+            val result = withContext(Dispatchers.IO) {
+                FastbootClient(transport, session).getVar("product")
+            }
+            append("Fastboot: " + result.status + " " + result.data)
         }
     }
 
     private fun runAdbProbe() {
-        val d = selectedDevice() ?: return append("No device\n")
+        val d = selectedDevice() ?: return append("No USB device")
         lifecycleScope.launch {
             val session = withContext(Dispatchers.IO) { transport.open(d) }
-                ?: return@launch append("open failed\n")
-            updateTitleBar(d)
+                ?: return@launch append("ADB open failed")
             val host = AdbHost(transport, session)
-            val ok = withContext(Dispatchers.IO) { host.connect() }
-            append("adb CNXN → $ok\n")
-            if (ok) {
-                val out = withContext(Dispatchers.IO) { host.shell("echo unitool") }
-                append("adb shell → ${out?.trim()}\n")
+            val connected = withContext(Dispatchers.IO) { host.connect() }
+            append("ADB protocol CNXN: " + connected + " · shell adb CLI is not bundled")
+            if (connected) {
+                val output = withContext(Dispatchers.IO) { host.shell("echo unitool") }
+                output?.let { append("ADB shell: " + it.trim()) }
             }
         }
     }
 
     private fun runMtkProbe() {
-        val d = selectedDevice() ?: return append("No device\n")
+        val d = selectedDevice() ?: return append("No USB device")
         lifecycleScope.launch {
             val session = withContext(Dispatchers.IO) { transport.open(d) }
-                ?: return@launch append("open failed\n")
-            updateTitleBar(d)
-            val mtk = MtkBrom(transport, session)
-            val r = withContext(Dispatchers.IO) { mtk.probe() }
-            append("mtk probe → ok=${r.ok} ${r.message}\n")
+                ?: return@launch append("MTK open failed")
+            val result = withContext(Dispatchers.IO) { MtkBrom(transport, session).probe() }
+            append("MTK probe: ok=" + result.ok + " " + result.message)
         }
     }
 
     private fun runNativeUsbTest() {
-        val d = selectedDevice() ?: return append("No device\n")
+        val d = selectedDevice() ?: return append("No USB device")
         lifecycleScope.launch {
             val session = withContext(Dispatchers.IO) { transport.open(d) }
-                ?: return@launch append("open failed\n")
-            updateTitleBar(d)
-            append("native test fd=${session.fileDescriptor} available=${NativeBridge.available}\n")
-            if (!NativeBridge.available) return@launch
-            val epOut = session.epOut?.address ?: -1
-            val epIn = session.epIn?.address ?: -1
-            append("endpoints out=0x${epOut.toString(16)} in=0x${epIn.toString(16)}\n")
-            if (epOut >= 0) {
-                val n = withContext(Dispatchers.IO) {
-                    NativeBridge.usbBulk(session.fileDescriptor, epOut, byteArrayOf(0), 500)
-                }
-                append("native bulkOut probe → $n\n")
-            }
-            if (epIn >= 0) {
-                val r = withContext(Dispatchers.IO) {
-                    NativeBridge.usbBulkIn(session.fileDescriptor, epIn, 64, 500)
-                }
-                append("native bulkIn → ${r?.size ?: "null"}\n")
-            }
+                ?: return@launch append("USB open failed")
+            if (!NativeBridge.available) return@launch append("Native USB bridge unavailable")
+            val out = session.epOut?.address ?: -1
+            val input = session.epIn?.address ?: -1
+            append("USB native test · out=0x" + out.toString(16) + " in=0x" + input.toString(16))
         }
-    }
-
-    private fun startShell(force: Boolean) {
-        if (shellStarted && !force) return
-        shell?.stop()
-        pty?.stop()
-        shellStarted = true
-        val fd = PtySession.currentUsbFd(this) ?: ShellSession.currentUsbFd(this)
-        append("starting Termux shell USB_FD=${fd ?: "-"} native=${NativeBridge.available}…\n")
-        lifecycleScope.launch(Dispatchers.IO) {
-            TermuxEnv.install(this@MainActivity)
-            withContext(Dispatchers.Main) {
-                if (NativeBridge.available) {
-                    pty = PtySession(
-                        this@MainActivity,
-                        onOutput = { s -> runOnUiThread { append(s) } },
-                        onExit = { code ->
-                            runOnUiThread {
-                                append("\n[pty exit $code]\n")
-                                shellStarted = false
-                            }
-                        },
-                    )
-                    pty?.start(fd)
-                } else {
-                    shell = ShellSession(
-                        this@MainActivity,
-                        onOutput = { s -> runOnUiThread { append(s) } },
-                        onExit = { code ->
-                            runOnUiThread {
-                                append("\n[shell exit $code]\n")
-                                shellStarted = false
-                            }
-                        },
-                    )
-                    shell?.start(fd)
-                }
-            }
-        }
-    }
-
-    private fun append(s: String) {
-        logView.append(s)
-        scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
     }
 }

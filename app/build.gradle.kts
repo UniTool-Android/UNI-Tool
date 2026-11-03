@@ -79,6 +79,10 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    // Built from the pinned Adbify source by scripts/build-adbify-terminal.sh.
+    implementation(files("libs/adbify-terminalview-release.aar"))
+    implementation("androidx.annotation:annotation:1.6.0")
+    implementation("com.getkeepsafe.relinker:relinker:1.4.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     // ---- Unit tests (JVM) ----
