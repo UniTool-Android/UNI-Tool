@@ -6,12 +6,6 @@ name: Build Termux bootstrap (ahk.unitool.gsm)
 
 on:
   workflow_dispatch:
-  # Also listed when default branch updates this file
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-termux-bootstrap.yml'
-
     inputs:
       architectures:
         description: "Bootstrap architectures (comma-separated)"
@@ -21,6 +15,11 @@ on:
         description: "Extra packages to preinstall (comma-separated)"
         required: false
         default: ""
+
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-termux-bootstrap.yml'
 
 concurrency:
   group: termux-bootstrap
@@ -57,9 +56,12 @@ jobs:
             ARGS+=(--add "$EXTRA")
           fi
           # Disable plugins we do not ship inside Uni Tool
-          ARGS+=(--disable-tasker --disable-float --disable-widget --disable-api --disable-boot --disable-styling --disable-x11 || true)
+          ARGS+=(--disable-tasker --disable-float --disable-widget --disable-api --disable-boot --disable-styling --disable-x11)
           chmod +x ./build-termux.sh
-          ./build-termux.sh "${ARGS[@]}" || ./build-termux.sh --name ahk.unitool.gsm --architectures "$ARCH"
+          if ! ./build-termux.sh "${ARGS[@]}"; then
+            echo "Optional plugin flags unsupported; retrying with required arguments only"
+            ./build-termux.sh --name ahk.unitool.gsm --architectures "$ARCH"
+          fi
 
       - name: Collect bootstrap zip
         run: |
