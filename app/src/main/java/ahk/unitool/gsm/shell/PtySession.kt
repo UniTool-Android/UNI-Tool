@@ -31,17 +31,23 @@ class PtySession(
         TermuxEnv.install(context)
         val (cmd, args) = TermuxEnv.shellCommand(context)
         val argv = arrayOf(cmd) + args
-        val env = TermuxEnv.buildEnv(context, usbFd).toMutableList()
-        // Expose FD number for scripts
-        if (usbFd != null && usbFd >= 0) {
-            env += "USB_FD=$usbFd"
-            // Optional: dup kept in parent only; child sees same number if we don't close
+        val inheritedUsbFd = if (usbFd != null && usbFd >= 0) {
+            NativeBridge.nativeDupFd(usbFd).takeIf { it >= 0 }
+        } else null
+        if (usbFd != null && inheritedUsbFd == null) {
+            onOutput("[USB FD could not be duplicated; shell will start without USB_FD]\\n")
         }
-        val result = NativeBridge.nativePtyStart(
-            argv,
-            env.toTypedArray(),
-            TermuxEnv.home.absolutePath,
-        )
+        val env = TermuxEnv.buildEnv(context, inheritedUsbFd)
+        val result = try {
+            NativeBridge.nativePtyStart(
+                argv,
+                env,
+                TermuxEnv.home.absolutePath,
+            )
+        } finally {
+            // The forked child owns its inherited copy; close only the parent's duplicate.
+            inheritedUsbFd?.let { NativeBridge.nativeCloseFd(it) }
+        }
         if (result == null || result.size < 2) {
             onOutput("[pty start failed]\n")
             onExit(-1)
