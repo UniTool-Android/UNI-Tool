@@ -42,6 +42,7 @@ object NativeBridge {
     external fun nativePtySetSize(masterFd: Int, rows: Int, cols: Int)
     external fun nativePtyClose(masterFd: Int, pid: Int)
     external fun nativeDupFd(fd: Int): Int
+    external fun nativeCloseFd(fd: Int)
 
     fun selfTest(): String = if (available) nativeSelfTest() else "native unavailable"
 
