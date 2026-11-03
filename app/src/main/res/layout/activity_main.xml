@@ -4,99 +4,128 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#0D0D0D">
+    android:background="#101418">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="#1B5E20"
+        android:background="#173F35"
         android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar"
         app:title="Uni Tool"
         app:subtitle="No USB device"
         app:titleTextColor="#FFFFFF"
-        app:subtitleTextColor="#C8E6C9" />
+        app:subtitleTextColor="#B7D8CB" />
 
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#121212"
+        android:background="#18201F"
         android:scrollbars="none">
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="4dp">
-            <Button android:id="@+id/btnRefresh" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Refresh" android:textSize="12sp" />
-            <Button android:id="@+id/btnPermission" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Permission" android:textSize="12sp" />
-            <Button android:id="@+id/btnOpen" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Open" android:textSize="12sp" />
-            <Button android:id="@+id/btnFastboot" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Fastboot" android:textSize="12sp" />
-            <Button android:id="@+id/btnAdb" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="ADB" android:textSize="12sp" />
-            <Button android:id="@+id/btnMtk" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="MTK" android:textSize="12sp" />
-            <Button android:id="@+id/btnNativeUsb" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="NativeUSB" android:textSize="12sp" />
-            <Button android:id="@+id/btnShell" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Restart shell" android:textSize="12sp" />
+            android:paddingHorizontal="4dp">
+            <Button android:id="@+id/btnRefresh" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="40dp" android:minWidth="0dp" android:text="Refresh" android:textSize="11sp" />
+            <Button android:id="@+id/btnPermission" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="40dp" android:minWidth="0dp" android:text="Permission" android:textSize="11sp" />
+            <Button android:id="@+id/btnOpen" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="40dp" android:minWidth="0dp" android:text="Open" android:textSize="11sp" />
+            <Button android:id="@+id/btnFastboot" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="40dp" android:minWidth="0dp" android:text="Fastboot" android:textSize="11sp" />
+            <Button android:id="@+id/btnAdb" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="40dp" android:minWidth="0dp" android:text="ADB" android:textSize="11sp" />
+            <Button android:id="@+id/btnMtk" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="40dp" android:minWidth="0dp" android:text="MTK" android:textSize="11sp" />
+            <Button android:id="@+id/btnNativeUsb" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="40dp" android:minWidth="0dp" android:text="Native USB" android:textSize="11sp" />
+            <Button android:id="@+id/btnShell" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="40dp" android:minWidth="0dp" android:text="Restart" android:textSize="11sp" />
         </LinearLayout>
     </HorizontalScrollView>
 
     <Spinner
         android:id="@+id/deviceSpinner"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="#1A1A1A"
-        android:padding="4dp" />
+        android:layout_height="44dp"
+        android:background="#202927"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="4dp" />
 
     <ScrollView
         android:id="@+id/scroll"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="#000000"
-        android:fillViewport="true">
+        android:background="#080B0A"
+        android:fillViewport="true"
+        android:fadeScrollbars="false">
         <TextView
             android:id="@+id/logView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
-            android:padding="8dp"
-            android:textColor="#00FF88"
-            android:textSize="12sp"
+            android:padding="10dp"
+            android:textColor="#B9F6CA"
+            android:textSize="13sp"
+            android:lineSpacingExtra="2dp"
             android:textIsSelectable="true" />
     </ScrollView>
 
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:background="#18201F"
+        android:scrollbars="none">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="4dp">
+            <Button android:id="@+id/keyEsc" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="48dp" android:layout_height="40dp" android:minWidth="0dp" android:text="ESC" android:textSize="11sp" />
+            <Button android:id="@+id/keyTab" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="48dp" android:layout_height="40dp" android:minWidth="0dp" android:text="TAB" android:textSize="11sp" />
+            <Button android:id="@+id/keyCtrlC" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="54dp" android:layout_height="40dp" android:minWidth="0dp" android:text="CTRL-C" android:textSize="10sp" />
+            <Button android:id="@+id/keyCtrlD" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="54dp" android:layout_height="40dp" android:minWidth="0dp" android:text="CTRL-D" android:textSize="10sp" />
+            <Button android:id="@+id/keyCtrlZ" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="54dp" android:layout_height="40dp" android:minWidth="0dp" android:text="CTRL-Z" android:textSize="10sp" />
+            <Button android:id="@+id/keyUp" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="44dp" android:layout_height="40dp" android:minWidth="0dp" android:text="↑" android:textSize="16sp" />
+            <Button android:id="@+id/keyDown" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="44dp" android:layout_height="40dp" android:minWidth="0dp" android:text="↓" android:textSize="16sp" />
+            <Button android:id="@+id/keyLeft" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="44dp" android:layout_height="40dp" android:minWidth="0dp" android:text="←" android:textSize="16sp" />
+            <Button android:id="@+id/keyRight" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="44dp" android:layout_height="40dp" android:minWidth="0dp" android:text="→" android:textSize="16sp" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="52dp"
         android:orientation="horizontal"
-        android:background="#111111"
-        android:padding="4dp">
+        android:gravity="center_vertical"
+        android:background="#111816"
+        android:paddingHorizontal="8dp">
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="$ "
-            android:textColor="#00FF88"
+            android:text=" $"
+            android:textColor="#69F0AE"
             android:fontFamily="monospace"
-            android:paddingStart="8dp"
-            android:paddingEnd="4dp" />
+            android:textSize="16sp"
+            android:paddingEnd="8dp" />
         <EditText
             android:id="@+id/input"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:background="@android:color/transparent"
-            android:hint="command"
-            android:textColorHint="#446644"
-            android:textColor="#00FF88"
+            android:hint="Enter command…"
+            android:textColorHint="#71847B"
+            android:textColor="#E8F5E9"
             android:fontFamily="monospace"
             android:imeOptions="actionSend"
             android:inputType="text"
             android:singleLine="true"
-            android:textSize="13sp" />
+            android:textSize="14sp"
+            android:paddingVertical="0dp" />
         <Button
             android:id="@+id/btnSend"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Enter"
+            android:layout_height="match_parent"
+            android:minWidth="56dp"
+            android:text="ENTER"
             android:textColor="#69F0AE" />
     </LinearLayout>
 </LinearLayout>
