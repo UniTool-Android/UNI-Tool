@@ -5,6 +5,7 @@ import android.system.Os
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
+import java.io.FilterInputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -179,7 +180,15 @@ object TermuxEnv {
         if (code !in 200..299) {
             throw IllegalStateException("HTTP $code for $urlStr")
         }
-        return conn.inputStream
+        return object : FilterInputStream(conn.inputStream) {
+            override fun close() {
+                try {
+                    super.close()
+                } finally {
+                    conn.disconnect()
+                }
+            }
+        }
     }
 
     private fun ensure(ctx: Context) {
