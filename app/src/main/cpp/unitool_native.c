@@ -130,9 +130,9 @@ JNIEXPORT jint JNICALL
 Java_ahk_unitool_gsm_native_NativeBridge_nativeUsbBulk(
         JNIEnv *env, jclass clazz,
         jint fd, jint endpoint, jbyteArray data, jint length, jint timeoutMs) {
-    if (fd < 0 || data == NULL || length < 0) return -EINVAL;
+    if (fd < 0 || data == NULL || length < 0 || timeoutMs < 0) return -EINVAL;
     jsize cap = (*env)->GetArrayLength(env, data);
-    if (length > cap) length = cap;
+    if (length > cap) return -EINVAL;
 
     jbyte *buf = (*env)->GetByteArrayElements(env, data, NULL);
     if (!buf) return -ENOMEM;
@@ -151,9 +151,10 @@ Java_ahk_unitool_gsm_native_NativeBridge_nativeUsbBulk(
         (*env)->ReleaseByteArrayElements(env, data, buf, JNI_ABORT);
         return -saved;
     }
-    /* rc is often 0 on success; actual transferred may equal length */
-    (*env)->ReleaseByteArrayElements(env, data, buf, 0);
-    return length; /* usbfs typically doesn't return short count via ioctl rc */
+    /* USBDEVFS_BULK returns the actual number of bytes transferred. */
+    (*env)->ReleaseByteArrayElements(env, data, buf,
+            (endpoint & 0x80) ? 0 : JNI_ABORT);
+    return rc;
 }
 
 JNIEXPORT jint JNICALL
@@ -161,7 +162,9 @@ Java_ahk_unitool_gsm_native_NativeBridge_nativeUsbControl(
         JNIEnv *env, jclass clazz,
         jint fd, jint requestType, jint request, jint value, jint index,
         jbyteArray data, jint length, jint timeoutMs) {
-    if (fd < 0) return -EINVAL;
+    if (fd < 0 || length < 0 || length > 0xffff || timeoutMs < 0) return -EINVAL;
+    if (data == NULL && length > 0) return -EINVAL;
+    if (data != NULL && length > (*env)->GetArrayLength(env, data)) return -EINVAL;
     jbyte *buf = NULL;
     if (data != NULL && length > 0) {
         buf = (*env)->GetByteArrayElements(env, data, NULL);
@@ -186,7 +189,7 @@ Java_ahk_unitool_gsm_native_NativeBridge_nativeUsbControl(
         LOGE("USBDEVFS_CONTROL: %s", strerror(saved));
         return -saved;
     }
-    return length;
+    return rc;
 }
 
 JNIEXPORT jint JNICALL
@@ -346,7 +349,13 @@ JNIEXPORT jint JNICALL
 Java_ahk_unitool_gsm_native_NativeBridge_nativeDupFd(
         JNIEnv *env, jclass clazz, jint fd) {
     if (fd < 0) return -EINVAL;
-    int n = fcntl(fd, F_DUPFD_CLOEXEC, 3);
-    if (n < 0) n = dup(fd);
+    /* The duplicate must survive execve() in the PTY child. */
+    int n = fcntl(fd, F_DUPFD, 3);
     return n < 0 ? -errno : n;
+}
+
+JNIEXPORT void JNICALL
+Java_ahk_unitool_gsm_native_NativeBridge_nativeCloseFd(
+        JNIEnv *env, jclass clazz, jint fd) {
+    if (fd >= 0) close(fd);
 }
