@@ -35,7 +35,7 @@ class PtySession(
             NativeBridge.nativeDupFd(usbFd).takeIf { it >= 0 }
         } else null
         if (usbFd != null && inheritedUsbFd == null) {
-            onOutput("[USB FD could not be duplicated; shell will start without USB_FD]\\n")
+            onOutput("[USB FD could not be duplicated; shell will start without USB_FD]\n")
         }
         val env = TermuxEnv.buildEnv(context, inheritedUsbFd)
         val result = try {
@@ -57,7 +57,7 @@ class PtySession(
         pid = result[1]
         NativeBridge.nativePtySetSize(masterFd, rows, cols)
         alive.set(true)
-        onOutput("PTY shell pid=$pid master=$masterFd USB_FD=${usbFd ?: "-"}\n")
+        onOutput("PTY shell pid=$pid master=$masterFd USB_FD=${inheritedUsbFd ?: "-"}\n")
 
         pool.execute {
             val buf = ByteArray(4096)
