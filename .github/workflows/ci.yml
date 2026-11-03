@@ -108,7 +108,7 @@ jobs:
       - name: Android lint
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:lintDebug --stacktrace || true
+          ./gradlew :app:lintDebug --stacktrace
 
       - name: Upload lint report
         if: always()
