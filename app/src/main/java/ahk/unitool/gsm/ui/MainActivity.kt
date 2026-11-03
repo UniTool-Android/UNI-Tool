@@ -248,9 +248,10 @@ class MainActivity : AppCompatActivity() {
         ViewCompat.requestApplyInsets(root)
     }
 
-    /** Adbify TerminalView accepts density-independent font sizes directly. */
+    /** TerminalRenderer uses Paint.setTextSize(), so convert the Adbify dp preference to px. */
     private fun applyTerminalFontSize() {
-        terminalView.setTextSize(terminalFontSizeDp.toInt())
+        val px = (terminalFontSizeDp * resources.displayMetrics.density + 0.5f).toInt()
+        terminalView.setTextSize(px)
     }
 
     private fun startTerminal() {
