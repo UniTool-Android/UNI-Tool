@@ -122,6 +122,25 @@ object TermuxEnv {
         }
     }
 
+
+    private fun openBootstrapStream(ctx: Context): java.io.InputStream {
+        return try {
+            ctx.assets.open(ASSET)
+        } catch (e: Exception) {
+            Log.i(TAG, "asset missing, downloading $BOOTSTRAP_URL")
+            val url = java.net.URL(BOOTSTRAP_URL)
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 120_000
+            conn.instanceFollowRedirects = true
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                throw IllegalStateException("HTTP $code downloading bootstrap")
+            }
+            conn.inputStream
+        }
+    }
+
     private fun installProot(ctx: Context) {
         val proot = File(filesDir, "proot")
         val talloc = File(filesDir, "libtalloc.so.2")
