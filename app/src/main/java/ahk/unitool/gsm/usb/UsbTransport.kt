@@ -26,6 +26,28 @@ class UsbTransport private constructor(private val app: Context) {
     private val mgr = app.getSystemService(Context.USB_SERVICE) as UsbManager
     private val sessions = ConcurrentHashMap<String, Session>()
 
+    private val detachReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != UsbManager.ACTION_USB_DEVICE_DETACHED) return
+            @Suppress("DEPRECATION")
+            val device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+            device?.let {
+                Log.i(TAG, "USB detached: ${it.deviceName}; closing session")
+                close(it.deviceName)
+            }
+        }
+    }
+
+    init {
+        val filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            app.registerReceiver(detachReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            app.registerReceiver(detachReceiver, filter)
+        }
+    }
+
     data class Session(
         val device: UsbDevice,
         val connection: UsbDeviceConnection,
