@@ -34,7 +34,23 @@ jobs:
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
+      - name: Install NDK (for Adbify PTY and UniTool native code)
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r25c
+          link-to-sdk: true
+
+      - name: Build Adbify terminal AAR
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          chmod +x scripts/build-adbify-terminal.sh
+          ./scripts/build-adbify-terminal.sh
+
       - name: Unit tests
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           chmod +x ./gradlew
           ./gradlew :app:testDebugUnitTest --stacktrace
@@ -68,12 +84,19 @@ jobs:
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
-      - name: Install NDK (for libunitool)
+      - name: Install NDK (for Adbify PTY and libunitool)
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: r27
+          ndk-version: r25c
           link-to-sdk: true
+
+      - name: Build Adbify terminal AAR
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          chmod +x scripts/build-adbify-terminal.sh
+          ./scripts/build-adbify-terminal.sh
 
       - name: Assemble debug
         env:
