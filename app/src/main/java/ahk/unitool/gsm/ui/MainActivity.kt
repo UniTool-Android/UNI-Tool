@@ -92,6 +92,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         shell?.stop()
         pty?.stop()
+        transport.closeAll()
         super.onDestroy()
     }
 
