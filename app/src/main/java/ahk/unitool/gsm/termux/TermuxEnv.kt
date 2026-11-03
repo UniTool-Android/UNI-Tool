@@ -35,7 +35,7 @@ object TermuxEnv {
      * Falls back to stock if this 404s.
      */
     private const val CUSTOM_BOOTSTRAP_URL =
-        "https://github.com/ahksoft/UNI-Tool/releases/download/termux-bootstrap/bootstrap-aarch64.zip"
+        "https://github.com/UniTool-Android/UNI-Tool/releases/download/termux-bootstrap/bootstrap-aarch64.zip"
     private const val STAMP_CUSTOM = "bootstrap-custom-ahk.unitool.gsm"
     private const val STAMP_STOCK = "bootstrap-stock-2026.11.01-r1"
     /** Only for stock bootstrap RPATH compatibility. */
@@ -106,7 +106,10 @@ object TermuxEnv {
             var entry = zis.nextEntry
             var symFile: File? = null
             while (entry != null) {
-                val name = entry.name
+                val name = entry.name.replace('\\', '/')
+                if (name.startsWith("/") || name.split('/').any { it == ".." }) {
+                    throw SecurityException("Unsafe bootstrap ZIP entry: $name")
+                }
                 if (name == "SYMLINKS.txt") {
                     symFile = File(filesDir, "SYMLINKS.txt")
                     FileOutputStream(symFile).use { out ->
@@ -114,7 +117,11 @@ object TermuxEnv {
                         while (zis.read(buf).also { n = it } > 0) out.write(buf, 0, n)
                     }
                 } else {
-                    val out = File(prefix, name)
+                    val out = File(prefix, name).canonicalFile
+                    val root = prefix.canonicalFile
+                    if (out != root && !out.path.startsWith(root.path + File.separator)) {
+                        throw SecurityException("Bootstrap ZIP entry escapes PREFIX: $name")
+                    }
                     if (entry.isDirectory) {
                         out.mkdirs()
                     } else {
@@ -191,7 +198,16 @@ object TermuxEnv {
             if (p.size != 2) return@forEach
             val targetName = p[0].trim()
             val linkRel = p[1].trim().removePrefix("./")
-            val link = File(prefix, linkRel)
+            if (linkRel.startsWith("/") || linkRel.split('/').any { it == ".." }) {
+                Log.w(TAG, "rejecting unsafe symlink path $linkRel")
+                return@forEach
+            }
+            val link = File(prefix, linkRel).canonicalFile
+            val root = prefix.canonicalFile
+            if (link != root && !link.path.startsWith(root.path + File.separator)) {
+                Log.w(TAG, "rejecting symlink outside PREFIX: $linkRel")
+                return@forEach
+            }
             try {
                 link.parentFile?.mkdirs()
                 if (link.exists()) link.delete()
