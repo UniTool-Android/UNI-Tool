@@ -15,11 +15,6 @@ on:
         required: false
         default: ""
 
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-termux-bootstrap.yml'
-
 concurrency:
   group: termux-bootstrap
   cancel-in-progress: false
@@ -108,7 +103,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          BOOT="$(find termux-generator -type f \\( -name 'bootstrap-aarch64.zip' -o -name 'bootstrap-*.zip' \\) -print -quit)"
+          BOOT="$(find termux-generator -type f -name 'bootstrap-aarch64.zip' -print -quit)"
+          if [[ -z "$BOOT" ]]; then
+            BOOT="$(find termux-generator -type f -name 'bootstrap-*.zip' -print -quit)"
+          fi
           if [[ -z "$BOOT" ]]; then
             echo "::error::No bootstrap ZIP was produced"
             find termux-generator -type f -name '*.zip' -print | head -40 || true
